@@ -1,10 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
+    associated_token::AssociatedToken, 
+    token::{
+        Mint, 
+        Token, 
+        TokenAccount
+    }
 };
 
-use crate::{state::Fundraiser, FundraiserError, ANCHOR_DISCRIMINATOR, MIN_AMOUNT_TO_RAISE};
+use crate::{
+    state::Fundraiser, FundraiserError, ANCHOR_DISCRIMINATOR, MIN_AMOUNT_TO_RAISE
+};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -33,6 +39,7 @@ pub struct Initialize<'info> {
 
 impl<'info> Initialize<'info> {
     pub fn initialize(&mut self, amount: u64, duration: u8, bumps: &InitializeBumps) -> Result<()> {
+
         // Check if the amount to raise meets the minimum amount required.
         //
         // MIN_AMOUNT_TO_RAISE is a count of whole tokens, so it has to be scaled by
@@ -59,7 +66,7 @@ impl<'info> Initialize<'info> {
             milestones_reached: 0,
             milestones_acknowledged: 0,
         });
-
+        
         Ok(())
     }
 }
