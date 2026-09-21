@@ -39,4 +39,10 @@ pub mod fundraiser {
 
         Ok(())
     }
+
+    pub fn acknowledge_milestone(ctx: Context<AcknowledgeMilestone>, index: u8) -> Result<()> {
+        ctx.accounts.acknowledge_milestone(index)?;
+
+        Ok(())
+    }
 }
