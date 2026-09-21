@@ -110,9 +110,9 @@ impl<'info> Contribute<'info> {
                 .fundraiser
                 .amount_to_raise
                 .checked_mul(*pct)
-                .ok_or(FundraiserError::InvalidAmount)?
+                .ok_or(FundraiserError::MilestoneCalculationOverflow)?
                 .checked_div(PERCENTAGE_SCALER)
-                .ok_or(FundraiserError::InvalidAmount)?;
+                .ok_or(FundraiserError::MilestoneCalculationOverflow)?;
 
             let bit = 1u8 << i;
 

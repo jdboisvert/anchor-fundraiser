@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { Fundraiser } from "../target/types/fundraiser";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createMint, getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
+import { assert, AssertionError } from "chai";
 
 describe("fundraiser", () => {
   // Configure the client to use the local cluster.
@@ -24,6 +25,23 @@ describe("fundraiser", () => {
   const fundraiser = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("fundraiser"), maker.publicKey.toBuffer()], program.programId)[0];
 
   const contributor = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("contributor"), fundraiser.toBuffer(), provider.publicKey.toBuffer()], program.programId)[0];
+
+  const errorCodeOf = (err: any): string => {
+    if (err instanceof AssertionError) throw err;
+    if (err?.error?.errorCode?.code) return err.error.errorCode.code;
+    const text = `${err?.message ?? ""} ${JSON.stringify(err?.logs ?? [])}`;
+    const match = text.match(/Error Code: (\w+)/);
+    return match ? match[1] : text.slice(0, 300);
+  };
+
+  const assertErrorIs = (err: any, expected: string, why: string) => {
+    const actual = errorCodeOf(err);
+    assert.strictEqual(
+      actual.toLowerCase(),
+      expected.toLowerCase(),
+      `${why} (expected ${expected}, got ${actual})`
+    );
+  };
 
   const confirm = async (signature: string): Promise<string> => {
     const block = await provider.connection.getLatestBlockhash();
@@ -140,17 +158,19 @@ describe("fundraiser", () => {
         vault,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .rpc({
-        skipPreflight: true,
-      })
+      .rpc()
       .then(confirm);
 
       console.log("\nContributed to fundraiser", tx);
-      console.log("Your transaction signature", tx);
-      console.log("Vault balance", (await provider.connection.getTokenAccountBalance(vault)).value.amount);
+      assert.fail(
+        "a contribution taking this wallet past the 10% per-contributor cap should have been rejected"
+      );
     } catch (error) {
-      console.log("\nError contributing to fundraiser");
-      console.log(error.msg);
+      assertErrorIs(
+        error,
+        "MaximumContributionsReached",
+        "this wallet has already contributed 2 of its 3 token allowance"
+      );
     }
   });
 
@@ -169,17 +189,19 @@ describe("fundraiser", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([maker])
-      .rpc({
-        skipPreflight: true,
-      })
+      .rpc()
       .then(confirm);
 
       console.log("\nChecked contributions");
-      console.log("Your transaction signature", tx);
-      console.log("Vault balance", (await provider.connection.getTokenAccountBalance(vault)).value.amount);
+      assert.fail(
+        "check_contributions should be rejected while the vault is below the target"
+      );
     } catch (error) {
-      console.log("\nError checking contributions");
-      console.log(error.msg);
+      assertErrorIs(
+        error,
+        "TargetNotMet",
+        "the vault holds 2 tokens against a 30 token target"
+      );
     }
   });
   

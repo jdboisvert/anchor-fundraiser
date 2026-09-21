@@ -26,4 +26,6 @@ pub enum FundraiserError {
     MilestoneAlreadyAcknowledged,
     #[msg("Acknowledge the earlier milestones first")]
     MilestoneOutOfOrder,
+    #[msg("Milestone threshold calculation overflowed")]
+    MilestoneCalculationOverflow,
 }
