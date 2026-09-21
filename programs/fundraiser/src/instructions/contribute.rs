@@ -1,20 +1,11 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{
-    Mint, 
-    transfer, 
-    Token, 
-    TokenAccount, 
-    Transfer
-};
+use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 
 use crate::{
-    state::{
-        Contributor, 
-        Fundraiser
-    }, FundraiserError, 
-    ANCHOR_DISCRIMINATOR, 
-    MAX_CONTRIBUTION_PERCENTAGE, 
-    PERCENTAGE_SCALER, SECONDS_TO_DAYS
+    events::MilestoneReached,
+    state::{Contributor, Fundraiser},
+    FundraiserError, ANCHOR_DISCRIMINATOR, MAX_CONTRIBUTION_PERCENTAGE, MILESTONE_PERCENTS,
+    PERCENTAGE_SCALER, SECONDS_TO_DAYS,
 };
 
 #[derive(Accounts)]
@@ -55,7 +46,6 @@ pub struct Contribute<'info> {
 
 impl<'info> Contribute<'info> {
     pub fn contribute(&mut self, amount: u64) -> Result<()> {
-
         // Check that the contribution is at least one whole token.
         //
         // The previous form was `1_u8.pow(decimals)`, and 1 raised to any power is 1
@@ -68,7 +58,9 @@ impl<'info> Contribute<'info> {
 
         // Check if the amount to contribute is less than the maximum allowed contribution
         require!(
-            amount <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER, 
+            amount
+                <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE)
+                    / PERCENTAGE_SCALER,
             FundraiserError::ContributionTooBig
         );
 
@@ -82,8 +74,12 @@ impl<'info> Contribute<'info> {
 
         // Check if the maximum contributions per contributor have been reached
         require!(
-            (self.contributor_account.amount <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER)
-                && (self.contributor_account.amount + amount <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER),
+            (self.contributor_account.amount
+                <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE)
+                    / PERCENTAGE_SCALER)
+                && (self.contributor_account.amount + amount
+                    <= (self.fundraiser.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE)
+                        / PERCENTAGE_SCALER),
             FundraiserError::MaximumContributionsReached
         );
 
@@ -105,6 +101,35 @@ impl<'info> Contribute<'info> {
         self.fundraiser.current_amount += amount;
 
         self.contributor_account.amount += amount;
+
+        // Record any quarter milestones this contribution just satisfied.
+        // Note currently not possible due to the contribution cap in place but ensures future updates
+        // respect that the milestones_reached is updated correctly if multiple are met.
+        for (i, pct) in MILESTONE_PERCENTS.iter().enumerate() {
+            let threshold = self
+                .fundraiser
+                .amount_to_raise
+                .checked_mul(*pct)
+                .ok_or(FundraiserError::InvalidAmount)?
+                .checked_div(PERCENTAGE_SCALER)
+                .ok_or(FundraiserError::InvalidAmount)?;
+
+            let bit = 1u8 << i;
+
+            if self.fundraiser.current_amount >= threshold
+                && self.fundraiser.milestones_reached & bit == 0
+            // Bitwise check to not refire if already set (very important)
+            {
+                // Threshold met update and fire event for consumers
+                self.fundraiser.milestones_reached |= bit;
+                emit!(MilestoneReached {
+                    fundraiser: self.fundraiser.key(),
+                    milestone: i as u8,
+                    current_amount: self.fundraiser.current_amount,
+                    amount_to_raise: self.fundraiser.amount_to_raise,
+                });
+            }
+        }
 
         Ok(())
     }
