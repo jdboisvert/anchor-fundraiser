@@ -10,4 +10,6 @@ pub struct Fundraiser {
     pub time_started: i64,
     pub duration: u8,
     pub bump: u8,
+    pub milestones_reached: u8,
+    pub milestones_acknowledged: u8,
 }
